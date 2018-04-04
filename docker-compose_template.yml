@@ -1,0 +1,103 @@
+version: '3'
+
+services:
+  database:
+    container_name: ${DOCKER_NAME}-${ENV}-postgres
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+    image: postgres:alpine
+    networks:
+      - program_network
+    # ports:
+      # - "5432"
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data"
+      - ./sql:/sql
+
+  php:
+    container_name: ${DOCKER_NAME}-${ENV}-php
+    image: dylansm/php_fpm_alpine
+    links:
+      - database
+    networks:
+      - program_network
+    ports:
+      - "9000"
+    volumes:
+      - .:/usr/share/nginx:rw
+      - ./etc/php7/${ENV}/php.ini:/etc/php7/php.ini:ro
+
+  web:
+    container_name: ${DOCKER_NAME}-${ENV}-web
+    environment:
+      - VIRTUAL_PORT=8080
+      # - VIRTUAL_HOST=${SITE_URL}
+      # - VIRTUAL_HOST=www.${SITE_URL},${SITE_URL}
+      # - LETSENCRYPT_HOST=${SITE_URL}
+      # begin prod host letsencrypt
+      # - LETSENCRYPT_HOST=www.${SITE_URL},${SITE_URL}
+      # end prod host letsencrypt
+      # - LETSENCRYPT_EMAIL=dev@theprogrampdx.com
+    image: dylansm/nginx
+    links:
+      - php
+    networks:
+      - program_network
+    ports:
+      - "8080"
+    volumes:
+    - ./web:/usr/share/nginx/web
+    - ./etc/nginx/conf.d/:/etc/nginx/conf.d
+    # - ./etc/nginx/restricted/htpasswd:/etc/nginx/restricted/htpasswd:ro
+
+  # begin nginx-proxy
+  nginx-proxy:
+    image: jwilder/nginx-proxy:alpine
+    container_name: nginx-proxy
+    labels:
+      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy=true"
+    networks:
+      - program_network
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - 'nginx-config:/etc/nginx/conf.d'
+      - 'nginx-certs:/etc/nginx/certs'
+      - 'nginx-vhosts:/etc/nginx/vhost.d'
+      - 'nginx-webroot:/usr/share/nginx/html'
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+  # end nginx-proxy
+
+  # begin letsencrypt
+  letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion:latest
+    environment:
+      - DEBUG=true
+    restart: always
+    volumes:
+      - 'nginx-config:/etc/nginx/conf.d'
+      - 'nginx-certs:/etc/nginx/certs'
+      - 'nginx-vhosts:/etc/nginx/vhost.d'
+      - 'nginx-webroot:/usr/share/nginx/html'
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+  # end letsencrypt
+
+volumes:
+  nginx-config:
+    external: true
+  nginx-certs:
+    external: true
+  nginx-vhosts:
+    external: true
+  nginx-webroot:
+    external: true
+  postgres_data:
+    driver: local
+
+networks:
+  program_network:
+    external:
+      name: program_net

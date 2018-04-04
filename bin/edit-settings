@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# make sed on MacOS work like Linux version
+. bin/sed-fix 1
+
+env=`cat .env | grep '^ENV='`
+env_value="${env#*=}"
+
+cp docker-compose_template.yml docker-compose.yml
+cp "etc/nginx/environments/$env_value/default.conf" etc/nginx/conf.d/
+
+url=`cat .env | grep '^SITE_URL='`
+site_url="${url#*=}"
+sed -i -e "s/{{ SERVER_NAME }}/$site_url/g" "etc/nginx/conf.d/default.conf"
+
+if [[ $env_value == "development" ]]; then
+  bin/start-dnsmasq
+  sed -i -e "s/# *ports/ports/g" "docker-compose.yml"
+  sed -i -e "s/# *- \"5432/- \"5432/g" "docker-compose.yml"
+  sed -i -e "s/# *- VIRTUAL_HOST=\${SITE_URL}$/- VIRTUAL_HOST=\${SITE_URL}/g" "docker-compose.yml"
+  # remove letsencrypt
+  perl -00 -i -pe 's/# begin letsencrypt.*?# end letsencrypt//s' "docker-compose.yml"
+fi
+
+if [[ $env_value =~ ^production$|^staging$ ]]; then
+  public=`cat .env | grep '^PUBLIC='`
+  public_value="${public#*=}"
+  if [[ $public_value == 'false' ]]; then
+    sed -i -e "s/# *auth_basic/auth_basic/g" "etc/nginx/conf.d/default.conf"
+    sed -i -e "s~# *- ./etc/nginx/restricted~- ./etc/nginx/restricted~g" "docker-compose.yml"
+  fi
+
+  if [[ $env_value == 'staging' ]]; then
+    sed -i -e "s/# *- VIRTUAL_HOST=\${SITE_URL}$/- VIRTUAL_HOST=\${SITE_URL}/g" "docker-compose.yml"
+  else
+    sed -i -e "s/# *- VIRTUAL_HOST=www/- VIRTUAL_HOST=www/g" "docker-compose.yml"
+  fi
+  # letsencrypt related
+  # first check that DNS is resolving so that letsencrypt can verify domain
+  this_ip=$(hostname  -I | cut -f1 -d' ')
+  remote_ip=$(dig +short $site_url)
+  if [[ $this_ip == $remote_ip ]]; then
+    sed -i -e "s/# *- LETSENCRYPT_EMAIL/- LETSENCRYPT_EMAIL/g" "docker-compose.yml"
+    if [[ $env_value == 'staging' ]]; then
+      perl -00 -i -pe 's/# *begin prod host letsencrypt.*?# *end prod host letsencrypt//s' "docker-compose.yml"
+      sed -i -e "s/# *- LETSENCRYPT_HOST/- LETSENCRYPT_HOST/g" "docker-compose.yml"
+    else
+      sed -i -e "s/# *- LETSENCRYPT_HOST=www/- LETSENCRYPT_HOST=www/g" "docker-compose.yml"
+    fi
+  else
+    # remove letsencrypt
+    perl -00 -i -pe 's/# begin letsencrypt.*?# end letsencrypt//s' "docker-compose.yml"
+  fi
+fi
+
+if [[ $(docker ps | grep "jwilder/nginx-proxy") ]]; then
+  perl -00 -i -pe 's/# begin nginx-proxy.*?# end nginx-proxy//s' "docker-compose.yml"
+elif [[ $(docker ps -a | grep "jwilder/nginx-proxy") ]]; then
+  perl -00 -i -pe 's/# begin nginx-proxy.*?# end nginx-proxy//s' "docker-compose.yml"
+  docker start nginx-proxy
+fi
+
+echo "Docker Compose files and nginx config settings adjusted."
+

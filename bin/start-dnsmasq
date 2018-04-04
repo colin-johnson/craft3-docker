@@ -1,0 +1,32 @@
+#!/bin/bash
+
+if [[ -z $(docker ps | grep dnsmasq) ]]; then
+  if [[ $(docker ps -a | grep dnsmasq) ]]; then
+    echo "Starting existing dnsmasq container..."
+    docker start dnsmasq
+  else
+    if [[ -f /etc/resolver/dev ]]; then
+      if [[ $(cat /etc/resolver/dev) =~ "nameserver 127.0.0.1" && $(cat /etc/resolver/dev) =~ "port 53535" ]]; then
+        echo "Starting dnsmasq..."
+        docker run -d --name dnsmasq --restart always -p 53535:53/tcp -p 53535:53/udp --cap-add NET_ADMIN andyshinn/dnsmasq --address=/dev/127.0.0.1
+      else
+        echo ""
+        echo "There is a dev resolver at /etc/resolver/dev but it has the wrong configuration."
+        echo "Please modify it to have the following:"
+        echo ""
+        echo "nameserver 127.0.0.1"
+        echo "port 53535"
+      fi
+    else
+      echo ""
+      echo "The dev resolver was not found at /etc/resolver/dev. Create that file with the following contents:"
+      echo ""
+      echo "nameserver 127.0.0.1"
+      echo "port 53535"
+      echo ""
+      echo "Once you have completed that step, rerun this command!"
+    fi
+  fi
+else
+  echo "Docker dnsmasq container is already running... skipping."
+fi

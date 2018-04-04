@@ -1,0 +1,25 @@
+#!/bin/bash
+
+echo ""
+echo "Running PHP Composer..."
+if [[ $(uname) == "Darwin" ]]; then
+  if [[ -f etc/auth.json ]]; then
+    docker run --rm -it -v $(pwd):/app -v $(pwd)/etc/auth.json:/tmp/auth.json composer install
+  else
+    docker run --rm -it -v $(pwd):/app composer install
+  fi
+else
+  if [[ -f etc/auth.json ]]; then
+    docker run --rm -it -v $PWD:/app -v $(pwd)/etc/auth.json:/tmp/auth.json -u $(id -u):$(id -g) composer install
+  else
+    docker run --rm -it -v $PWD:/app -u $(id -u):$(id -g) composer install
+  fi
+fi
+
+echo "Done."
+echo "Configuring permissions..."
+touch config/license.key
+chmod 777 config/license.key
+chmod 777 storage/
+chmod 777 web/cpresources/
+echo "Done."

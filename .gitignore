@@ -1,0 +1,11 @@
+/.env*
+/etc/auth.json
+!/.env.example
+/.idea
+/vendor
+.DS_Store
+/craft/storage/*
+/config/license.key
+docker-compose.yml
+/etc/nginx/conf.d/default.conf
+composer.lock

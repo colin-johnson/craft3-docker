@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# make sed on MacOS work like Linux version
+if [[ $(uname) == "Darwin" ]]; then
+  # look for gnu-sed
+  if [[ $(command -v gsed) == '/usr/local/bin/gsed' ]]; then
+    sed_cmd=/usr/local/bin/gsed
+  elif [[ $(command -v sed) == '/usr/local/bin/sed' ]]; then
+    sed_cmd=/usr/local/bin/sed
+  fi
+
+  if [[ $sed_cmd && ! $1 -eq 1 ]]; then
+    echo "Found a version of gnu-sed on MacOS."
+  fi
+else
+  echo "Found a version of gnu-sed on Linux."
+  sed_cmd=$(command -v sed)
+fi
+
+sed() {
+  $sed_cmd "$@"
+}

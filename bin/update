@@ -1,0 +1,20 @@
+#!/bin/bash
+
+echo ""
+echo "Running PHP Composer update..."
+
+if [[ $(uname) == "Darwin" ]]; then
+  if [[ -f etc/auth.json ]]; then
+    docker run --rm -it -v $(pwd):/app -v $(pwd)/etc/auth.json:/tmp/auth.json composer update
+  else
+    docker run --rm -it -v $(pwd):/app composer update
+  fi
+else
+  if [[ -f etc/auth.json ]]; then
+    docker run --rm -it -u $(id -u):$(id -g) -v $(pwd)/etc/auth.json:/tmp/auth.json -v $(pwd):/app composer update
+  else
+    docker run --rm -it -u $(id -u):$(id -g) -v $(pwd):/app composer update
+  fi
+fi
+
+echo "Done."

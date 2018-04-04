@@ -1,0 +1,118 @@
+#!/bin/bash
+
+PROJECT_STARTER='craft_3_docker'
+VALID_ENVIRONMENTS=( development staging production )
+DOCKER_NETWORKS=( program_net )
+DOCKER_VOLUMES=( nginx-config nginx-vhosts nginx-certs nginx-webroot )
+
+### SETUP AND UTILS
+
+# make sed on MacOS work like Linux version
+if [[  $(. bin/sed-fix) =~ "Found a version of gnu-sed" ]]; then
+  . bin/sed-fix 1
+else
+  echo ""
+  echo "The MacOS version of sed is weird. Please brew install gnu-sed before continuing."
+  exit
+fi
+
+function valid_message {
+  message="Please set ENV to one of the following:"
+  envs=""
+  for i in "${VALID_ENVIRONMENTS[@]}"
+  do
+    envs="$envs $i,"
+  done
+  envs=${envs%?};
+  message="$message $envs."
+  echo $message
+}
+
+### PHP COMPOSER
+
+if [[ -f composer.lock ]]; then
+  echo "Checking for composer.lock file... found"
+else
+  bin/init
+fi
+
+### VERIFY ENVIRONMENTS
+
+if [[ ! -f .env ]]; then
+  echo "There is no .env file. Create that first."
+  exit
+fi
+
+env=`cat .env | grep '^ENV='`
+if [[ "$env" ]]; then
+  env_value="${env#*=}"
+  for i in "${VALID_ENVIRONMENTS[@]}"
+  do
+    if [[ "$i" == "$env_value" ]]; then
+      valid_env=1
+    fi
+  done
+else
+  echo ""
+  echo "No ENV set in .env file. $(valid_message)"
+  exit
+fi
+
+url=`cat .env | grep '^SITE_URL='`
+site_url="${url#*=}"
+if [[ $site_url == '' ]]; then
+  echo "No value for SITE_URL found in .env file. Please set that before proceeding."
+  exit
+fi
+echo "Looking for .env file... found"
+
+docker_name=`cat .env | grep '^DOCKER_NAME='`
+docker_name_value="${docker_name#*=}"
+if [[ $docker_name_value == '' ]]; then
+  echo "You must specify a DOCKER_NAME value in .env file."
+  exit
+fi
+echo "Looking for DOCKER_NAME... found"
+
+### CUSTOMIZE docker-compose.yml
+
+if [[ $valid_env ]]; then
+  bin/edit-settings
+else
+  echo ""
+  echo $(valid_message)
+  exit
+fi
+
+### CREATE DEFAULT NETWORKS AND VOLUMES
+
+for i in "${DOCKER_NETWORKS[@]}"
+do
+  if [[ $(docker network ls | grep $i) ]]; then
+    echo "Docker network $i already exists... skipping."
+  else
+    echo "Creating Docker network ${i}..."
+    docker network create $i
+  fi
+done
+
+for i in "${DOCKER_VOLUMES[@]}"
+do
+  if [[ $(docker volume ls | grep $i) ]]; then
+    echo "External volume $i already exists... skipping."
+  else
+    echo "Creating external volume ${i}..."
+    docker volume create $i
+  fi
+done
+
+docker-compose up -d
+
+if [[ $env_value =~ ^development$ ]]; then
+  echo ""
+  echo "(Ignore any warnings about orphan containers above.)"
+fi
+
+if [[ $(git remote -v) =~ "$PROJECT_STARTER" ]]; then
+  bin/connect-project
+fi

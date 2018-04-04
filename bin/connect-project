@@ -1,0 +1,37 @@
+#!/bin/bash
+
+echo ""
+echo "Are you ready to disconnect from the starter project repository URL and add make this the project repository?"
+read -p ": " response
+response_letter="${response:0:1}"
+if [[ "$response_letter" =~ [yY] ]]; then
+
+  echo "What is the repository URL for the new project?"
+  read -p ": " repo_url
+
+  if [[ "$repo_url" == "" ]]; then
+    echo "No URL provided. Quitting."
+    exit
+  fi
+
+  find . -name '.git' -exec rm -rf {} \;
+  echo "Removing current git repository... Done"
+
+  git init .
+  git remote add origin "$repo_url"
+
+  if [[ -f gitignore_project ]]; then
+    mv gitignore_project .gitignore
+    echo "Creating project-specific .gitignore... Done"
+  fi
+
+else
+  echo ""
+  echo "Project repository setup canceled. Run ./bin/connect_project project when you are ready."
+  if [[ -f gitignore_starter ]]; then
+    mv gitignore_starter .gitignore
+    echo "Restored starter .gitignore... Done"
+  fi
+  exit
+fi
+

@@ -1,0 +1,76 @@
+#!/bin/bash
+
+VALID_ENVIRONMENTS=( development staging production )
+
+function valid_message {
+  message="Please set ENV to one of the following:"
+  envs=""
+  for i in "${VALID_ENVIRONMENTS[@]}"
+  do
+    envs="$envs $i,"
+  done
+  envs=${envs%?};
+  message="$message $envs."
+  echo $message
+}
+
+### VERIFY ENVIRONMENTS
+
+if [[ ! -f .env ]]; then
+  echo "There is no .env file. Create that first."
+  exit
+fi
+
+env=`cat .env | grep '^ENV='`
+if [[ "$env" ]]; then
+  env_value="${env#*=}"
+  for i in "${VALID_ENVIRONMENTS[@]}"
+  do
+    if [[ "$i" == "$env_value" ]]; then
+      valid_env=1
+    fi
+  done
+else
+  echo ""
+  echo "No ENV set in .env file. $(valid_message)"
+  exit
+fi
+
+if [[ $valid_env ]]; then
+
+  name_k=`cat .env | grep '^DOCKER_NAME='`
+  name="${name_k#*=}"
+
+  host_k=`cat .env | grep '^DB_SERVER='`
+  host="${host_k#*=}"
+
+  database_k=`cat .env | grep '^DB_DATABASE='`
+  database="${database_k#*=}"
+
+  user_k=`cat .env | grep '^DB_USER='`
+  user="${user_k#*=}"
+
+  password_k=`cat .env | grep '^DB_PASSWORD='`
+  password="${password_k#*=}"
+
+  echo ""
+  echo "Importing SQL using psql on postgres container..."
+
+  file_name="${env_value}_${name}.sql"
+
+  if [[ -f sql/$file_name ]]; then
+    docker-compose run --rm --no-deps -e PGPASSWORD=$password database psql --dbname=$database --host=$host --port=5432 --username=$user -a -f /sql/$file_name
+  else
+    echo ""
+    echo "Missing SQL file. Looking for ${env_value}_${name}.sql file."
+  fi
+
+  echo ""
+  echo "Done."
+
+else
+  echo ""
+  echo $(valid_message)
+  exit
+fi
+
